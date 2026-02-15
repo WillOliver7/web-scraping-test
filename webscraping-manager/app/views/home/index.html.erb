@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Manager Scraping</title>
+    <style>
+      body { font-family: sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding-top: 50px; }
+      .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 400px; }
+      input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+      button { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+      .btn-login { background: #1877f2; color: white; }
+      .btn-signup { background: #42b72a; color: white; }
+      .btn-logout { background: #f02849; color: white; margin-top: 20px; }
+      .hidden { display: none; }
+      #output { background: #222; color: #0f0; padding: 15px; margin-top: 15px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+
+  <div class="card">
+    <div id="auth-box">
+      <h2>Login / Cadastro</h2>
+      <input type="email" id="email" placeholder="Email">
+      <input type="password" id="password" placeholder="Senha">
+      <button class="btn-login" onclick="auth('login')">Entrar</button>
+      <button class="btn-signup" onclick="auth('signup')">Criar Conta</button>
+    </div>
+
+    <div id="user-box" class="hidden">
+      <div style="display:flex; justify-content:center; align-items:center; gap:30%;">
+        <div><strong id="display-email"></strong></div>
+        <button class="btn-logout" onclick="logout()">Sair</button>
+      </div>
+      <div id="dashboard-section" style="margin-top: 20px;">
+        <h2>Dashboard Scraping</h2>
+        <p>Usuário: <strong id="display-email"></strong></p>
+        
+        <div style="background: #eef; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+          <h4>Nova Extração (Webmotors)</h4>
+          <input type="text" id="car-url" placeholder="Cole o link do anúncio aqui...">
+          <button class="btn-primary" onclick="startScraping()">Iniciar Extração</button>
+          <div id="output" class="hidden"></div>
+        </div>
+
+        <div id="tasks-container" style="margin-top: 20px;">
+          <button class="btn-test" onclick="loadTasks()">Ver Minhas Tasks</button>
+          
+          <table style="width: 100%; border-collapse: collapse; background: white; font-size: 14px; margin-top: 15px;">
+            <thead>
+              <tr style="background: #ddd; text-align: left;">
+                <th style="padding: 8px;">ID</th>
+                <th style="padding: 8px;">URL</th>
+                <th style="padding: 8px;">Status</th>
+                <th style="padding: 8px;">Resultado</th>
+              </tr>
+            </thead>
+            <tbody id="tasks-table-body">
+              </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const AUTH_URL = "http://localhost:3001";
+
+    window.onload = () => {
+      if (localStorage.getItem('token')) showUser();
+    };
+
+    async function auth(type) {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const path = type === 'login' ? '/login' : '/signup';
+
+      try {
+        const resp = await fetch(`${AUTH_URL}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, password_confirmation: password })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          if (type === 'login') {
+            localStorage.setItem('token', data.token);
+            localStorage.setItem('email', data.email);
+            showUser();
+          } else {
+            alert("Conta criada!");
+          }
+        } else {
+          alert("Erro: " + JSON.stringify(data));
+        }
+      } catch (e) {
+        alert("Erro ao conectar no Auth-Service (3001)");
+      }
+    }
+
+    function showUser() {
+      document.getElementById('auth-box').classList.add('hidden');
+      document.getElementById('user-box').classList.remove('hidden');
+      document.getElementById('display-email').innerText = localStorage.getItem('email');
+    }
+
+    function logout() {
+      localStorage.clear();
+      location.reload();
+    }
+
+    async function startScraping() {
+      const url = document.getElementById('car-url').value;
+      if (!url) return alert("Insira uma URL!");
+
+      // Mostra o output para o usuário ver o feedback
+      const out = document.getElementById('output');
+      out.classList.remove('hidden');
+      out.innerText = "Enviando para fila...";
+
+      try {
+        const resp = await fetch('/tasks', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('token')
+          },
+          // O Rails espera os parâmetros dentro da chave "task"
+          body: JSON.stringify({ task: { url: url } }) 
+        });
+        
+        const data = await resp.json();
+
+        if (resp.ok) {
+          out.innerText = "Task criada! ID: " + data.id + "\nStatus: " + data.status;
+          document.getElementById('car-url').value = ""; // Limpa o input
+        } else {
+          out.innerText = "Erro: " + JSON.stringify(data.errors || data);
+        }
+      } catch (e) {
+        out.innerText = "Erro ao iniciar scraping: " + e.message;
+      }
+    }
+
+    async function loadTasks() {
+      const body = document.getElementById('tasks-table-body');
+      body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">Carregando...</td></tr>';
+
+      try {
+        const resp = await fetch('/tasks', {
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        
+        if (!resp.ok) throw new Error("Erro na requisição");
+        
+        const tasks = await resp.json();
+        renderTasks(tasks);
+      } catch (e) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red; padding:10px;">Erro ao carregar tasks.</td></tr>';
+      }
+    }
+
+    function renderTasks(tasks) {
+      const body = document.getElementById('tasks-table-body');
+      
+      if (tasks.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">Nenhuma task encontrada.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = tasks.map(task => `
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 8px;">#${task.id}</td>
+          <td style="padding: 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <a href="${task.url}" target="_blank">${task.url}</a>
+          </td>
+          <td style="padding: 8px;">
+            <span style="padding: 2px 6px; border-radius: 4px; font-size: 12px; background: ${statusColor(task.status)}">
+              ${task.status.toUpperCase()}
+            </span>
+          </td>
+          <td style="padding: 8px;">
+            ${task.first_quote ? `<strong>${task.author}</strong> - ${task.first_quote.substring(0, 50)}...` : '---'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function statusColor(status) {
+      switch(status) {
+        case 'completed': return '#dfd';
+        case 'processing': return '#fff3cd';
+        case 'failed': return '#f8d7da';
+        default: return '#eee';
+      }
+    }
+  </script>
+
+  </body>
+</html>

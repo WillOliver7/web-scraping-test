@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+
+  redis:
+    image: redis:7-alpine
+
+  auth-service:
+    build: ./auth-service
+    command: bundle exec rails s -p 3001 -b '0.0.0.0'
+    volumes:
+      - ./auth-service:/rails
+    ports:
+      - "3001:3001"
+    environment:
+      - SECRET_KEY_BASE=996ef811917c29fb60eae74bae4a60f2d569ffa9471f572072dbb0a1a359a6091c4920fd35ad661d359f275a9d4d63b8823c2cede8f219f484c5b771625a1975
+      - DATABASE_URL=postgresql://postgres:password@db:5432/auth_service_development
+    depends_on:
+      - db
+
+  notification-service:
+    build: ./notification-service
+    command: bundle exec rails s -p 3002 -b '0.0.0.0'
+    volumes:
+      - ./notification-service:/rails
+    ports:
+      - "3002:3002"
+    environment:
+      - SECRET_KEY_BASE=sua_chave_gerada_aqui
+      - DATABASE_URL=postgresql://postgres:password@db:5432/notification_service_development
+    depends_on:
+      - db
+
+  webscraping-manager:
+    build: ./webscraping-manager
+    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails s -p 3000 -b '0.0.0.0'"
+    volumes:
+      - ./webscraping-manager:/rails
+    ports:
+      - "3000:3000"
+    environment:
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY_BASE=996ef811917c29fb60eae74bae4a60f2d569ffa9471f572072dbb0a1a359a6091c4920fd35ad661d359f275a9d4d63b8823c2cede8f219f484c5b771625a1975
+      - DATABASE_URL=postgresql://postgres:password@db:5432/webscraping_manager_development
+    depends_on:
+      - db
+      - redis
+    stdin_open: true
+    tty: true
+
+  sidekiq:
+    build: ./webscraping-manager
+    command: bundle exec sidekiq
+    volumes:
+      - ./webscraping-manager:/rails
+    environment:
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY_BASE=996ef811917c29fb60eae74bae4a60f2d569ffa9471f572072dbb0a1a359a6091c4920fd35ad661d359f275a9d4d63b8823c2cede8f219f484c5b771625a1975
+      - DATABASE_URL=postgresql://postgres:password@db:5432/webscraping_manager_development
+    depends_on:
+      - db
+      - redis
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
