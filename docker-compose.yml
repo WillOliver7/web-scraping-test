@@ -25,19 +25,24 @@ services:
       - DATABASE_URL=postgresql://postgres:password@db:5432/auth_service_development
     depends_on:
       - db
+    stdin_open: true
+    tty: true
 
   notification-service:
     build: ./notification-service
+    hostname: notification-service # Força o hostname
     command: bundle exec rails s -p 3002 -b '0.0.0.0'
     volumes:
       - ./notification-service:/rails
     ports:
       - "3002:3002"
     environment:
-      - SECRET_KEY_BASE=sua_chave_gerada_aqui
+      - SECRET_KEY_BASE=996ef811917c29fb60eae74bae4a60f2d569ffa9471f572072dbb0a1a359a6091c4920fd35ad661d359f275a9d4d63b8823c2cede8f219f484c5b771625a1975
       - DATABASE_URL=postgresql://postgres:password@db:5432/notification_service_development
     depends_on:
       - db
+    stdin_open: true
+    tty: true
 
   webscraping-manager:
     build: ./webscraping-manager
@@ -47,8 +52,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - REDIS_URL=redis://redis:6379/1
       - SECRET_KEY_BASE=996ef811917c29fb60eae74bae4a60f2d569ffa9471f572072dbb0a1a359a6091c4920fd35ad661d359f275a9d4d63b8823c2cede8f219f484c5b771625a1975
+      - REDIS_URL=redis://redis:6379/1
       - DATABASE_URL=postgresql://postgres:password@db:5432/webscraping_manager_development
     depends_on:
       - db
@@ -58,7 +63,8 @@ services:
 
   sidekiq:
     build: ./webscraping-manager
-    command: bundle exec sidekiq
+    # Espera 10 segundos antes de começar para dar tempo do DNS estabilizar
+    command: bash -c "sleep 10 && bundle exec sidekiq"
     volumes:
       - ./webscraping-manager:/rails
     environment:
@@ -68,8 +74,9 @@ services:
     depends_on:
       - db
       - redis
+      - notification-service
     stdin_open: true
-    tty: true
+    tty: true  
 
 volumes:
   postgres_data:

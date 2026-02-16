@@ -1,63 +1,154 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <script src="https://unpkg.com/@rails/actioncable@7.0.0/app/assets/javascripts/action_cable.js"></script>
     <title>Manager Scraping</title>
     <style>
-      body { font-family: sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding-top: 50px; }
-      .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 400px; }
-      input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-      button { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-      .btn-login { background: #1877f2; color: white; }
-      .btn-signup { background: #42b72a; color: white; }
-      .btn-logout { background: #f02849; color: white; margin-top: 20px; }
-      .hidden { display: none; }
-      #output { background: #222; color: #0f0; padding: 15px; margin-top: 15px; border-radius: 4px; font-family: monospace; font-size: 12px; }
+      body {
+        font-family: sans-serif;
+        background: #f0f2f5;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      header {
+        background: #1877f2;
+        color: white;
+        padding: 15px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      .user-header {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 15px;
+        padding: 0 20px;
+      }
+      .container {
+        display: flex;
+        justify-content: space-between;
+        width: 80%;
+        margin-top: 20px;
+      }
+      .left-panel, .right-panel {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        width: 48%;
+      }
+      input {
+        width: 100%;
+        padding: 12px;
+        margin: 10px 0;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        box-sizing: border-box;
+      }
+      button {
+        width: fit-content;
+        padding: 12px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+        margin-top: 10px;
+      }
+      .btn-primary {
+        background: #42b72a;
+        color: white;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        font-size: 14px;
+        margin-top: 15px;
+      }
+      th, td {
+        padding: 8px;
+        text-align: left;
+      }
+      th {
+        background: #ddd;
+      }
+      .hide {
+        display: none;
+      }
+      .progress-container {
+        width: 100%;
+        background-color: #e0e0e0; /* Cinza um pouco mais escuro para contraste */
+        border-radius: 10px;
+        margin-top: 8px;
+        height: 12px; /* Altura fixa para o container */
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        background-color: #1877f2;
+        width: 0%; /* Começa em 0 */
+        transition: width 0.4s ease-in-out;
+      }
     </style>
   </head>
   <body>
 
-  <div class="card">
-    <div id="auth-box">
-      <h2>Login / Cadastro</h2>
-      <input type="email" id="email" placeholder="Email">
-      <input type="password" id="password" placeholder="Senha">
-      <button class="btn-login" onclick="auth('login')">Entrar</button>
-      <button class="btn-signup" onclick="auth('signup')">Criar Conta</button>
+  <header>
+    <div class="user-header hide" id="user-header">
+      <strong id="display-email"></strong>
+      <button class="btn-logout" onclick="logout()">Sair</button>
+    </div>
+  </header>
+
+  <div id="auth-box" class="hide">
+    <h2>Login / Cadastro</h2>
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Senha">
+    <button class="btn-primary" onclick="auth('login')">Entrar</button>
+    <button class="btn-primary" onclick="auth('signup')">Criar Conta</button>
+  </div>
+
+  <div class="container hide" id="dashboard-container">
+    <div class="left-panel">
+      <h4>Nova Extração</h4>
+      <input type="text" id="url" placeholder="Cole o link do anúncio aqui...">
+      <button class="btn-primary" onclick="startScraping()">Iniciar Extração</button>
+      <div id="output" class="hide"></div>
+      <h4>Processamentos</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>URL</th>
+            <th>Status</th>
+            <th>Resultado</th>
+          </tr>
+        </thead>
+        <tbody id="notifications-table-body">
+          <tr><td colspan="4" style="text-align:center; padding:10px;">Nenhuma Processamento encontrado.</td></tr>
+        </tbody>
+      </table>
     </div>
 
-    <div id="user-box" class="hidden">
-      <div style="display:flex; justify-content:center; align-items:center; gap:30%;">
-        <div><strong id="display-email"></strong></div>
-        <button class="btn-logout" onclick="logout()">Sair</button>
-      </div>
-      <div id="dashboard-section" style="margin-top: 20px;">
-        <h2>Dashboard Scraping</h2>
-        <p>Usuário: <strong id="display-email"></strong></p>
-        
-        <div style="background: #eef; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-          <h4>Nova Extração (Webmotors)</h4>
-          <input type="text" id="car-url" placeholder="Cole o link do anúncio aqui...">
-          <button class="btn-primary" onclick="startScraping()">Iniciar Extração</button>
-          <div id="output" class="hidden"></div>
-        </div>
-
-        <div id="tasks-container" style="margin-top: 20px;">
-          <button class="btn-test" onclick="loadTasks()">Ver Minhas Tasks</button>
-          
-          <table style="width: 100%; border-collapse: collapse; background: white; font-size: 14px; margin-top: 15px;">
-            <thead>
-              <tr style="background: #ddd; text-align: left;">
-                <th style="padding: 8px;">ID</th>
-                <th style="padding: 8px;">URL</th>
-                <th style="padding: 8px;">Status</th>
-                <th style="padding: 8px;">Resultado</th>
-              </tr>
-            </thead>
-            <tbody id="tasks-table-body">
-              </tbody>
-          </table>
-        </div>
-      </div>
+    <div class="right-panel">
+      <h4>Minhas Tasks</h4>
+      <button class="btn-primary" onclick="loadTasks()">Atualizar</button>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Autor</th>
+            <th>Citação</th>
+          </tr>
+        </thead>
+        <tbody id="tasks-table-body">
+          <tr><td colspan="4" style="text-align:center; padding:10px;">Nenhuma task encontrada.</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -65,7 +156,12 @@
     const AUTH_URL = "http://localhost:3001";
 
     window.onload = () => {
-      if (localStorage.getItem('token')) showUser();
+      if (localStorage.getItem('token')) {
+        showUser();
+        loadTasks();
+      } else {
+        document.getElementById('auth-box').classList.remove('hide');
+      }
     };
 
     async function auth(type) {
@@ -97,41 +193,43 @@
     }
 
     function showUser() {
-      document.getElementById('auth-box').classList.add('hidden');
-      document.getElementById('user-box').classList.remove('hidden');
+      authbox = document.getElementById('auth-box');
+      document.getElementById('auth-box').classList.add('hide');
+      document.getElementById('dashboard-container').classList.remove('hide');
+      document.getElementById('user-header').classList.remove('hide');
       document.getElementById('display-email').innerText = localStorage.getItem('email');
     }
 
     function logout() {
       localStorage.clear();
-      location.reload();
+      document.getElementById('auth-box').classList.remove('hide');
+      document.getElementById('dashboard-container').classList.add('hide');
+      document.getElementById('user-header').classList.add('hide');
     }
 
     async function startScraping() {
-      const url = document.getElementById('car-url').value;
+      const url = document.getElementById('url').value;
       if (!url) return alert("Insira uma URL!");
 
-      // Mostra o output para o usuário ver o feedback
       const out = document.getElementById('output');
-      out.classList.remove('hidden');
+      out.classList.remove('hide');
       out.innerText = "Enviando para fila...";
 
       try {
         const resp = await fetch('/tasks', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + localStorage.getItem('token')
           },
-          // O Rails espera os parâmetros dentro da chave "task"
-          body: JSON.stringify({ task: { url: url } }) 
+          body: JSON.stringify({ task: { url: url } })
         });
-        
+
         const data = await resp.json();
 
         if (resp.ok) {
-          out.innerText = "Task criada! ID: " + data.id + "\nStatus: " + data.status;
-          document.getElementById('car-url').value = ""; // Limpa o input
+          document.getElementById('url').value = "";
+          loadTasks();
         } else {
           out.innerText = "Erro: " + JSON.stringify(data.errors || data);
         }
@@ -141,26 +239,34 @@
     }
 
     async function loadTasks() {
-      const body = document.getElementById('tasks-table-body');
-      body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">Carregando...</td></tr>';
+      const tasksBody = document.getElementById('tasks-table-body');
+      const procBody = document.getElementById('notifications-table-body');
+      
+      tasksBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando...</td></tr>';
+      procBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
 
       try {
         const resp = await fetch('/tasks', {
           headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
         });
-        
+
         if (!resp.ok) throw new Error("Erro na requisição");
-        
+
         const tasks = await resp.json();
+
         renderTasks(tasks);
+
+        const processingTasks = tasks.filter(t => t.status === 'processing' || t.status === 'pending');
+        renderProcessing(processingTasks);
+
       } catch (e) {
-        body.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red; padding:10px;">Erro ao carregar tasks.</td></tr>';
+        console.error(e);
       }
     }
 
     function renderTasks(tasks) {
       const body = document.getElementById('tasks-table-body');
-      
+
       if (tasks.length === 0) {
         body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">Nenhuma task encontrada.</td></tr>';
         return;
@@ -168,20 +274,51 @@
 
       body.innerHTML = tasks.map(task => `
         <tr style="border-bottom: 1px solid #eee;">
-          <td style="padding: 8px;">#${task.id}</td>
-          <td style="padding: 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            <a href="${task.url}" target="_blank">${task.url}</a>
+          <td>#${task.id}</td>
+          <td>
+            ${task.author ? `<strong>${task.author}</strong>` : '---'}
           </td>
-          <td style="padding: 8px;">
-            <span style="padding: 2px 6px; border-radius: 4px; font-size: 12px; background: ${statusColor(task.status)}">
-              ${task.status.toUpperCase()}
-            </span>
+          <td>
+            ${task.first_quote ? `${task.first_quote}` : '---'}
           </td>
-          <td style="padding: 8px;">
-            ${task.first_quote ? `<strong>${task.author}</strong> - ${task.first_quote.substring(0, 50)}...` : '---'}
-          </td>
+          
         </tr>
       `).join('');
+    }
+
+    function renderProcessing(tasks) {
+      const body = document.getElementById('notifications-table-body');
+      if (tasks.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">Nenhum processamento ativo.</td></tr>';
+        return;
+      }
+
+      body.innerHTML = tasks.map(task => {
+        // Inscreve no canal se estiver processando OU pendente
+        if (task.status === 'processing' || task.status === 'pending') {
+          setupSubscription(task.id);
+        }
+
+        return `
+          <tr style="border-bottom: 1px solid #eee;" id="task-row-${task.id}">
+            <td>#${task.id}</td>
+            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <a href="${task.url}" target="_blank">${task.url}</a>
+            </td>
+            <td>
+              <span id="status-badge-${task.id}" style="padding: 2px 6px; border-radius: 4px; font-size: 12px; background: ${statusColor(task.status)}">
+                ${task.status.toUpperCase()}
+              </span>
+              <div class="progress-container" id="progress-container-${task.id}">
+                <div class="progress-bar" id="progress-bar-${task.id}" style="width: 5%;"></div>
+              </div>
+            </td>
+            <td id="result-${task.id}">
+              ${task.first_quote ? `<strong>${task.author}</strong>` : 'Aguardando...'}
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     function statusColor(status) {
@@ -191,6 +328,55 @@
         case 'failed': return '#f8d7da';
         default: return '#eee';
       }
+    }
+    const cable = ActionCable.createConsumer("ws://localhost:3002/cable");
+    const activeSubscriptions = {};
+
+    function setupSubscription(taskId) {
+      if (activeSubscriptions[taskId]) {
+        console.log(`Já existe uma assinatura ativa para a Task ${taskId}`);
+        return;
+      }
+
+      activeSubscriptions[taskId] = cable.subscriptions.create(
+        { channel: "ProgressChannel", task_id: taskId },
+        {
+          connected() {
+            console.log(`✅ CONECTADO ao WebSocket da Task ${taskId}`);
+          },
+          disconnected() {
+            console.log(`❌ DESCONECTADO da Task ${taskId}`);
+          },
+          received(data) {
+            console.log("📩 MENSAGEM RECEBIDA:", data);
+            
+            const bar = document.getElementById(`progress-bar-${taskId}`);
+            const badge = document.getElementById(`status-badge-${taskId}`);
+            const resultCell = document.getElementById(`result-${taskId}`);
+
+            if (bar) {
+              bar.style.width = data.percentage + "%";
+              console.log(`Atualizando barra ${taskId} para ${data.percentage}%`);
+            } else {
+              console.warn(`Elemento progress-bar-${taskId} não encontrado no DOM ainda.`);
+            }
+            
+            if (badge && data.status) {
+              badge.innerText = data.status.toUpperCase();
+              badge.style.background = statusColor(data.status);
+            }
+
+            if (data.status === 'completed' || data.status === 'failed') {
+              // Quando terminar, aguarda um pouco e recarrega as listas
+              setTimeout(() => {
+                loadTasks(); 
+                this.unsubscribe();
+                delete activeSubscriptions[taskId];
+              }, 1500);
+            }
+          }
+        }
+      );
     }
   </script>
 
