@@ -3,8 +3,6 @@ class CreateTasks < ActiveRecord::Migration[8.1]
     create_table :tasks do |t|
       t.string :url
       t.string :status
-      t.string :first_quote
-      t.string :author
       t.text :last_error
 
       t.timestamps

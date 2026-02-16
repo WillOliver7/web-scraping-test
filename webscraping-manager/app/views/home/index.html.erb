@@ -31,16 +31,19 @@
       .container {
         display: flex;
         justify-content: space-between;
-        width: 80%;
+        width: 95%;
         margin-top: 20px;
+        gap: 20px;
       }
       .left-panel, .right-panel {
         background: white;
         padding: 20px;
         border-radius: 8px;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        width: 48%;
       }
+      .left-panel { width: 35%; }
+      .right-panel { width: 60%; }
+      
       input {
         width: 100%;
         padding: 12px;
@@ -50,8 +53,7 @@
         box-sizing: border-box;
       }
       button {
-        width: fit-content;
-        padding: 12px;
+        padding: 10px 15px;
         border: none;
         border-radius: 6px;
         cursor: pointer;
@@ -62,36 +64,61 @@
         background: #42b72a;
         color: white;
       }
+      .btn-nav {
+        background: #e4e6eb;
+        color: #050505;
+        font-size: 12px;
+        margin: 0 5px;
+        padding: 5px 10px;
+      }
+      .btn-nav:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
       table {
         width: 100%;
         border-collapse: collapse;
         background: white;
-        font-size: 14px;
+        font-size: 13px;
         margin-top: 15px;
       }
       th, td {
-        padding: 8px;
+        padding: 10px;
         text-align: left;
+        border-bottom: 1px solid #eee;
       }
       th {
-        background: #ddd;
+        background: #f8f9fa;
+        color: #666;
       }
-      .hide {
-        display: none;
-      }
+      .hide { display: none; }
       .progress-container {
         width: 100%;
-        background-color: #e0e0e0; /* Cinza um pouco mais escuro para contraste */
+        background-color: #e0e0e0;
         border-radius: 10px;
         margin-top: 8px;
-        height: 12px; /* Altura fixa para o container */
+        height: 10px;
         overflow: hidden;
       }
       .progress-bar {
         height: 100%;
         background-color: #1877f2;
-        width: 0%; /* Começa em 0 */
+        width: 0%;
         transition: width 0.4s ease-in-out;
+      }
+      .pagination-ctrl {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-top: 20px;
+        padding: 10px;
+        background: #f9f9f9;
+        border-radius: 6px;
+      }
+      .page-info {
+        font-size: 12px;
+        font-weight: bold;
+        color: #65676b;
       }
     </style>
   </head>
@@ -114,61 +141,81 @@
 
   <div class="container hide" id="dashboard-container">
     <div class="left-panel">
-      <h4>Nova Extração</h4>
-      <input type="text" id="url" placeholder="Cole o link do anúncio aqui...">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h4>Nova Extração</h4>
+        <div class="pagination-ctrl">
+          <button class="btn-nav" id="task-prev" onclick="changeTaskPage(-1)">◀</button>
+          <span class="page-info" id="task-page-info">Página 1</span>
+          <button class="btn-nav" id="task-next" onclick="changeTaskPage(1)">▶</button>
+        </div>
+      </div>
+      <input type="text" id="url" placeholder="Cole a URL para scraping...">
       <button class="btn-primary" onclick="startScraping()">Iniciar Extração</button>
-      <div id="output" class="hide"></div>
-      <h4>Processamentos</h4>
+      
+      <h4>Status das Tasks</h4>
       <table>
         <thead>
           <tr>
             <th>ID</th>
-            <th>URL</th>
             <th>Status</th>
-            <th>Resultado</th>
+            <th>Progresso</th>
           </tr>
         </thead>
-        <tbody id="notifications-table-body">
-          <tr><td colspan="4" style="text-align:center; padding:10px;">Nenhuma Processamento encontrado.</td></tr>
-        </tbody>
+        <tbody id="notifications-table-body"></tbody>
       </table>
+      
     </div>
 
     <div class="right-panel">
-      <h4>Minhas Tasks</h4>
-      <button class="btn-primary" onclick="loadTasks()">Atualizar</button>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h4>Banco de Citações</h4>
+        <div class="pagination-ctrl">
+          <button class="btn-nav" id="quote-prev" onclick="changeQuotePage(-1)">◀</button>
+          <span class="page-info" id="quote-page-info">Página 1</span>
+          <button class="btn-nav" id="quote-next" onclick="changeQuotePage(1)">▶</button>
+        </div>
+      </div>
       <table>
         <thead>
           <tr>
-            <th>ID</th>
+            <th>ID Quote</th>
             <th>Autor</th>
             <th>Citação</th>
+            <th>Task Ref</th>
           </tr>
         </thead>
-        <tbody id="tasks-table-body">
-          <tr><td colspan="4" style="text-align:center; padding:10px;">Nenhuma task encontrada.</td></tr>
-        </tbody>
+        <tbody id="quotes-table-body"></tbody>
       </table>
+
     </div>
   </div>
 
   <script>
     const AUTH_URL = "http://localhost:3001";
+    const cable = ActionCable.createConsumer("ws://localhost:3002/cable");
+    const activeSubscriptions = {};
+    
+    // Estados de Paginação
+    let currentTaskPage = 1;
+    let currentQuotePage = 1;
+    let totalTaskPages = 1;
+    let totalQuotePages = 1;
 
     window.onload = () => {
       if (localStorage.getItem('token')) {
         showUser();
         loadTasks();
+        loadQuotes();
       } else {
         document.getElementById('auth-box').classList.remove('hide');
       }
     };
 
+    // --- AUTH & LOGOUT ---
     async function auth(type) {
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
       const path = type === 'login' ? '/login' : '/signup';
-
       try {
         const resp = await fetch(`${AUTH_URL}${path}`, {
           method: 'POST',
@@ -181,19 +228,14 @@
             localStorage.setItem('token', data.token);
             localStorage.setItem('email', data.email);
             showUser();
-          } else {
-            alert("Conta criada!");
-          }
-        } else {
-          alert("Erro: " + JSON.stringify(data));
-        }
-      } catch (e) {
-        alert("Erro ao conectar no Auth-Service (3001)");
-      }
+            loadTasks();
+            loadQuotes();
+          } else { alert("Conta criada!"); }
+        } else { alert("Erro: " + JSON.stringify(data)); }
+      } catch (e) { alert("Erro de conexão"); }
     }
 
     function showUser() {
-      authbox = document.getElementById('auth-box');
       document.getElementById('auth-box').classList.add('hide');
       document.getElementById('dashboard-container').classList.remove('hide');
       document.getElementById('user-header').classList.remove('hide');
@@ -202,19 +244,13 @@
 
     function logout() {
       localStorage.clear();
-      document.getElementById('auth-box').classList.remove('hide');
-      document.getElementById('dashboard-container').classList.add('hide');
-      document.getElementById('user-header').classList.add('hide');
+      location.reload();
     }
 
+    // --- SCRAPING ---
     async function startScraping() {
       const url = document.getElementById('url').value;
       if (!url) return alert("Insira uma URL!");
-
-      const out = document.getElementById('output');
-      out.classList.remove('hide');
-      out.innerText = "Enviando para fila...";
-
       try {
         const resp = await fetch('/tasks', {
           method: 'POST',
@@ -224,101 +260,131 @@
           },
           body: JSON.stringify({ task: { url: url } })
         });
-
-        const data = await resp.json();
-
         if (resp.ok) {
           document.getElementById('url').value = "";
+          currentTaskPage = 1; // Volta para a primeira página para ver a nova task
           loadTasks();
-        } else {
-          out.innerText = "Erro: " + JSON.stringify(data.errors || data);
         }
-      } catch (e) {
-        out.innerText = "Erro ao iniciar scraping: " + e.message;
-      }
+      } catch (e) { console.error(e); }
     }
 
+    // --- CARREGAMENTO DE TASKS (KAMINARI) ---
     async function loadTasks() {
-      const tasksBody = document.getElementById('tasks-table-body');
-      const procBody = document.getElementById('notifications-table-body');
-      
-      tasksBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Carregando...</td></tr>';
-      procBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Carregando...</td></tr>';
-
       try {
-        const resp = await fetch('/tasks', {
+        const resp = await fetch(`/tasks?page=${currentTaskPage}`, {
           headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
         });
+        const result = await resp.json(); // Espera { data: [], meta: {} }
+        totalTaskPages = result.meta.total_pages;
+        renderProcessing(result.data);
+        updatePaginationUI('task', result.meta);
+      } catch (e) { console.error(e); }
+    }
 
-        if (!resp.ok) throw new Error("Erro na requisição");
-
-        const tasks = await resp.json();
-
-        renderTasks(tasks);
-
-        const processingTasks = tasks.filter(t => t.status === 'processing' || t.status === 'pending');
-        renderProcessing(processingTasks);
-
-      } catch (e) {
-        console.error(e);
+    function changeTaskPage(step) {
+      const target = currentTaskPage + step;
+      if (target >= 1 && target <= totalTaskPages) {
+        currentTaskPage = target;
+        loadTasks();
       }
     }
 
-    function renderTasks(tasks) {
-      const body = document.getElementById('tasks-table-body');
+    // --- CARREGAMENTO DE QUOTES (KAMINARI) ---
+    async function loadQuotes() {
+      const quotesBody = document.getElementById('quotes-table-body');
+      quotesBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Atualizando...</td></tr>';
+      try {
+        const resp = await fetch(`/quotes?page=${currentQuotePage}`, {
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        const result = await resp.json();
+        totalQuotePages = result.meta.total_pages;
+        renderQuotes(result.data);
+        updatePaginationUI('quote', result.meta);
+      } catch (e) { console.error(e); }
+    }
 
-      if (tasks.length === 0) {
-        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">Nenhuma task encontrada.</td></tr>';
+    function changeQuotePage(step) {
+      const target = currentQuotePage + step;
+      if (target >= 1 && target <= totalQuotePages) {
+        currentQuotePage = target;
+        loadQuotes();
+      }
+    }
+
+    // --- RENDERIZAÇÃO E UI ---
+    function updatePaginationUI(prefix, meta) {
+      document.getElementById(`${prefix}-page-info`).innerText = `Página ${meta.current_page} de ${meta.total_pages}`;
+      document.getElementById(`${prefix}-prev`).disabled = !meta.prev_page;
+      document.getElementById(`${prefix}-next`).disabled = !meta.next_page;
+    }
+
+    function renderQuotes(quotes) {
+      const body = document.getElementById('quotes-table-body');
+      if (!quotes || quotes.length === 0) {
+        body.innerHTML = '<tr><td colspan="4" style="text-align:center;">Nenhuma citação.</td></tr>';
         return;
       }
-
-      body.innerHTML = tasks.map(task => `
-        <tr style="border-bottom: 1px solid #eee;">
-          <td>#${task.id}</td>
-          <td>
-            ${task.author ? `<strong>${task.author}</strong>` : '---'}
-          </td>
-          <td>
-            ${task.first_quote ? `${task.first_quote}` : '---'}
-          </td>
-          
+      body.innerHTML = quotes.map(q => `
+        <tr>
+          <td><strong>#${q.id}</strong></td>
+          <td>${q.author}</td>
+          <td style="font-style: italic; color: #444;">"${q.content}"</td>
+          <td style="color: #999;">Task #${q.task_id}</td>
         </tr>
       `).join('');
     }
 
     function renderProcessing(tasks) {
       const body = document.getElementById('notifications-table-body');
-      if (tasks.length === 0) {
-        body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:10px;">Nenhum processamento ativo.</td></tr>';
+      if (!tasks || tasks.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" style="text-align:center;">Nenhuma task.</td></tr>';
         return;
       }
-
       body.innerHTML = tasks.map(task => {
-        // Inscreve no canal se estiver processando OU pendente
         if (task.status === 'processing' || task.status === 'pending') {
           setupSubscription(task.id);
         }
-
         return `
-          <tr style="border-bottom: 1px solid #eee;" id="task-row-${task.id}">
-            <td>#${task.id}</td>
-            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-              <a href="${task.url}" target="_blank">${task.url}</a>
-            </td>
+          <tr id="task-row-${task.id}">
+            <td><strong>#${task.id}</strong></td>
             <td>
-              <span id="status-badge-${task.id}" style="padding: 2px 6px; border-radius: 4px; font-size: 12px; background: ${statusColor(task.status)}">
+              <span id="status-badge-${task.id}" style="padding: 2px 6px; border-radius: 4px; font-size: 11px; background: ${statusColor(task.status)}">
                 ${task.status.toUpperCase()}
               </span>
-              <div class="progress-container" id="progress-container-${task.id}">
-                <div class="progress-bar" id="progress-bar-${task.id}" style="width: 5%;"></div>
-              </div>
             </td>
-            <td id="result-${task.id}">
-              ${task.first_quote ? `<strong>${task.author}</strong>` : 'Aguardando...'}
+            <td width="50%">
+              <div class="progress-container">
+                <div class="progress-bar" id="progress-bar-${task.id}" style="width: ${task.status === 'completed' ? '100%' : '5%'}"></div>
+              </div>
             </td>
           </tr>
         `;
       }).join('');
+    }
+
+    // --- WEBSOCKETS ---
+    function setupSubscription(taskId) {
+      if (activeSubscriptions[taskId]) return;
+      activeSubscriptions[taskId] = cable.subscriptions.create(
+        { channel: "ProgressChannel", task_id: taskId },
+        {
+          received(data) {
+            const bar = document.getElementById(`progress-bar-${taskId}`);
+            const badge = document.getElementById(`status-badge-${taskId}`);
+            if (bar) bar.style.width = data.percentage + "%";
+            if (badge) {
+              badge.innerText = data.status.toUpperCase();
+              badge.style.background = statusColor(data.status);
+            }
+            if (data.status === 'completed') {
+              // Se estiver na primeira página, atualiza quotes automaticamente
+              if (currentQuotePage === 1) loadQuotes();
+              setTimeout(() => { loadTasks(); }, 2000);
+            }
+          }
+        }
+      );
     }
 
     function statusColor(status) {
@@ -329,56 +395,6 @@
         default: return '#eee';
       }
     }
-    const cable = ActionCable.createConsumer("ws://localhost:3002/cable");
-    const activeSubscriptions = {};
-
-    function setupSubscription(taskId) {
-      if (activeSubscriptions[taskId]) {
-        console.log(`Já existe uma assinatura ativa para a Task ${taskId}`);
-        return;
-      }
-
-      activeSubscriptions[taskId] = cable.subscriptions.create(
-        { channel: "ProgressChannel", task_id: taskId },
-        {
-          connected() {
-            console.log(`✅ CONECTADO ao WebSocket da Task ${taskId}`);
-          },
-          disconnected() {
-            console.log(`❌ DESCONECTADO da Task ${taskId}`);
-          },
-          received(data) {
-            console.log("📩 MENSAGEM RECEBIDA:", data);
-            
-            const bar = document.getElementById(`progress-bar-${taskId}`);
-            const badge = document.getElementById(`status-badge-${taskId}`);
-            const resultCell = document.getElementById(`result-${taskId}`);
-
-            if (bar) {
-              bar.style.width = data.percentage + "%";
-              console.log(`Atualizando barra ${taskId} para ${data.percentage}%`);
-            } else {
-              console.warn(`Elemento progress-bar-${taskId} não encontrado no DOM ainda.`);
-            }
-            
-            if (badge && data.status) {
-              badge.innerText = data.status.toUpperCase();
-              badge.style.background = statusColor(data.status);
-            }
-
-            if (data.status === 'completed' || data.status === 'failed') {
-              // Quando terminar, aguarda um pouco e recarrega as listas
-              setTimeout(() => {
-                loadTasks(); 
-                this.unsubscribe();
-                delete activeSubscriptions[taskId];
-              }, 1500);
-            }
-          }
-        }
-      );
-    }
   </script>
-
   </body>
 </html>

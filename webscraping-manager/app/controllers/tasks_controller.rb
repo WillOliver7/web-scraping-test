@@ -15,8 +15,21 @@ class TasksController < ApplicationController
   end
 
   def index
-    tasks = Task.where(user_id: @current_user[:user_id]).order(created_at: :desc).limit(10)
-    render json: tasks
+    @tasks = Task.where(user_id: @current_user[:user_id])
+                  .order(created_at: :desc)
+                 .page(params[:page])
+                 .per(10)
+                 
+    render json: {
+      data: @tasks,
+      meta: {
+        current_page: @tasks.current_page,
+        next_page: @tasks.next_page,
+        prev_page: @tasks.prev_page,
+        total_pages: @tasks.total_pages,
+        total_count: @tasks.total_count
+      }
+    }
   end
 
   private

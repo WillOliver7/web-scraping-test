@@ -10,34 +10,39 @@ class ScraperWorker
     return unless task
 
     task.update(status: 'processing')
-    send_notification(task.id, 10, 'processing')
-    sleep 1 
+    send_notification(task.id, 0, 'processing')
 
-    begin
-      send_notification(task.id, 30, 'processing')
-      
+    begin      
       response = HTTParty.get(task.url, headers: {
         "User-Agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
       }, timeout: 10)
 
       if response.success?
+        count = 0
         doc = Nokogiri::HTML(response.body)
-        first_quote = doc.at_css('.quote .text')&.text&.strip
-        author = doc.at_css('.quote .author')&.text&.strip
+        quote_elements = doc.css('.quote')
+        total_quotes = quote_elements.size
+        to_import = []
 
-        send_notification(task.id, 90, 'processing')
-        sleep 1
-
-        if first_quote
-          task.update(
-            first_quote: first_quote,
-            author: author,
-            status: 'completed',
-            last_error: nil
-          )
-        else
-          task.update(status: 'completed')
+        if total_quotes == 0
+          task.update(status: 'failed', last_error: "Nenhuma citação encontrada na página")
+          send_notification(task.id, 100, 'failed')
+          return
         end
+
+        quote_elements.each_with_index do |quote_element, index|
+          send_notification(task.id, ((index + 1) * 100.0 / total_quotes).to_i, 'processing')
+          quote_text = quote_element.css('.text').text.strip
+          author = quote_element.css('.author').text.strip
+          to_import << Quote.new(task: task, user_id: task.user_id, content: quote_text, author: author)
+
+          Quote.import(to_import, on_duplicate_key_update: [:content, :author]) if to_import.size >= 500
+          to_import.clear if to_import.size >= 500
+        end
+
+        Quote.import(to_import, on_duplicate_key_update: [:content, :author]) if to_import.any?
+        task.update(status: 'completed')
+        send_notification(task.id, 100, 'completed')
       else
         task.update(status: 'failed', last_error: "HTTP Error: #{response.code}")
       end

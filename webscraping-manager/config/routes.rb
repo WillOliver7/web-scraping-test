@@ -4,4 +4,5 @@ Rails.application.routes.draw do
   get '/test_protected', to: 'test#protected_route'
   root "home#index"
   resources :tasks, only: [:create, :index]
+  resources :quotes, only: [:index]
 end
