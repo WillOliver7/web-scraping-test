@@ -19,6 +19,7 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 gem "solid_cache"
 gem "solid_queue"
 gem "solid_cable"
+gem "redis", ">= 4.0"
 
 gem 'rack-cors'
 
