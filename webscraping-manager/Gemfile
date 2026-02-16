@@ -17,17 +17,14 @@ gem "stimulus-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 gem "jbuilder"
 
-# Scraping
 gem 'nokogiri'
-# Para as tarefas em segundo plano
 gem 'sidekiq'
 gem 'redis'
-# Para falar com os outros microsserviços
 gem 'httparty'
-
 gem 'rack-cors'
-
+gem 'activerecord-import'
 gem "sprockets-rails"
+gem 'kaminari'
 
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
 # gem "bcrypt", "~> 3.1.7"

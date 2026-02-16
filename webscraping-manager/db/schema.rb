@@ -10,14 +10,22 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_14_175210) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_16_140942) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
-  create_table "tasks", force: :cascade do |t|
+  create_table "quotes", force: :cascade do |t|
     t.string "author"
+    t.text "content"
     t.datetime "created_at", null: false
-    t.string "first_quote"
+    t.bigint "task_id", null: false
+    t.datetime "updated_at", null: false
+    t.integer "user_id"
+    t.index ["task_id"], name: "index_quotes_on_task_id"
+  end
+
+  create_table "tasks", force: :cascade do |t|
+    t.datetime "created_at", null: false
     t.text "last_error"
     t.string "status"
     t.datetime "updated_at", null: false
@@ -25,4 +33,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_14_175210) do
     t.integer "user_id", null: false
     t.index ["user_id"], name: "index_tasks_on_user_id"
   end
+
+  add_foreign_key "quotes", "tasks"
 end
