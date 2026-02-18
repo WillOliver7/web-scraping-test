@@ -18,7 +18,7 @@ class TasksController < ApplicationController
     @tasks = Task.where(user_id: @current_user[:user_id])
                   .order(created_at: :desc)
                  .page(params[:page])
-                 .per(10)
+                 .per(5)
                  
     render json: {
       data: @tasks,

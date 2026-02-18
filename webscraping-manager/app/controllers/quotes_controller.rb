@@ -4,7 +4,7 @@ class QuotesController < ApplicationController
   def index
     @quotes = Quote.where(user_id: @current_user[:user_id])
                  .page(params[:page])
-                 .per(10)
+                 .per(5)
 
     render json: {
       data: @quotes,
