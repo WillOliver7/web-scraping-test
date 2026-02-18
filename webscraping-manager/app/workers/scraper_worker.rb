@@ -42,7 +42,6 @@ class ScraperWorker
 
         Quote.import(to_import, on_duplicate_key_update: [:content, :author]) if to_import.any?
         task.update(status: 'completed')
-        send_notification(task.id, 100, 'completed')
       else
         task.update(status: 'failed', last_error: "HTTP Error: #{response.code}")
       end
